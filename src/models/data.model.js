@@ -1,4 +1,4 @@
-import mongoose, { mongo } from "mongoose";
+import mongoose from "mongoose";
 
 const metalSchema = new mongoose.Schema({
   metal: { type: String, required: true },
@@ -8,26 +8,27 @@ const metalSchema = new mongoose.Schema({
 const daySchema = new mongoose.Schema({
   date: { type: Date, required: true },
   metals: [metalSchema],
-  HPI: { type: Number },
-  HEI: { type: Number },
-  siteInterpretation: { type: String },
-  siteImpact: { type: String },
-  policyRecommendations: { type: String },
+  HPI: { type: Number, default: null },
+  HEI: { type: Number, default: null },
+  siteInterpretation: { type: String, default: null },
+  siteImpact: { type: String, default: null },
+  policyRecommendations: { type: String, default: null },
 });
 
 const siteSchema = new mongoose.Schema({
   siteArea: { type: String, required: true },
   State: { type: String, required: true },
-  siteCode: { type: String, required: true },
+  siteCode: { type: String, required: true }, // integer IDs will be converted to string in controller
   location: {
-    lat: { type: Number },
-    lon: { type: Number },
+    lat: { type: Number, default: null },    // make optional to prevent NaN errors
+    lon: { type: Number, default: null },
   },
   tests: [daySchema],
   createdAt: { type: Date, default: Date.now },
 });
 
 export default mongoose.model("Site", siteSchema);
+
 
 // {
 //   "_id": "66f3a1c9b12e8f0012f45abc",

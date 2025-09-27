@@ -1,6 +1,7 @@
 {
   "name": "mg_backend",
   "version": "1.0.0",
+  "type": "module",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
@@ -15,7 +16,7 @@
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "express": "^5.1.0",
-    "mongoose": "^8.18.1",
+    "mongoose": "^8.18.2",
     "multer": "^2.0.2"
   },
   "devDependencies": {
