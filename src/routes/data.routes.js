@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { handleUpload } from "../controllers/data.controllers.js";
+import { uploadCSV } from "../controllers/data.controllers.js";
 
 const router = Router();
 
-router.route("/upload").post(handleUpload);
+router.route("/upload").post(uploadCSV);
 
 export default router;

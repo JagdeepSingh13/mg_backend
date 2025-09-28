@@ -4,8 +4,6 @@ import fs from "fs";
 import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-
-
 const upload = multer({ dest: "uploads/" });
 
 // Gemini setup
@@ -19,7 +17,9 @@ async function analyzeWithGemini(siteData) {
   Site Area: ${siteData.siteArea}
   State: ${siteData.State}
   Location: lat ${siteData.location.lat}, lon ${siteData.location.lon}
-  Metals: ${siteData.tests[0].metals.map(m => `${m.metal}: ${m.values[0]}`).join(", ")}
+  Metals: ${siteData.tests[0].metals
+    .map((m) => `${m.metal}: ${m.values[0]}`)
+    .join(", ")}
   HPI: ${siteData.tests[0].HPI}
 
   Respond in JSON format with 3 fields:
@@ -39,68 +39,172 @@ async function analyzeWithGemini(siteData) {
     return {
       siteInterpretation: "Interpretation unavailable.",
       siteImpact: "Impact unavailable.",
-      policyRecommendations: "Recommendation unavailable."
+      policyRecommendations: "Recommendation unavailable.",
     };
   }
 }
 
-export const handleUpload = [
+// export const handleUpload = [
+//   upload.single("file"),
+//   async (req, res) => {
+//     try {
+//       const results = [];
+
+//       fs.createReadStream(req.file.path)
+//         .pipe(csv())
+//         .on("data", (row) => results.push(row))
+//         .on("end", async () => {
+//           const siteDocs = [];
+
+//           for (const row of results) {
+//             let siteDoc = {
+//               siteArea: row.landuse,
+//               State: "Maharashtra",
+//               siteCode: row.id.toString(),
+//               location: {
+//                 lat: parseFloat(row.lat),
+//                 lon: parseFloat(row.lon),
+//               },
+//               tests: [
+//                 {
+//                   date: new Date(),
+//                   metals: [
+//                     { metal: "EC_uScm", values: [parseFloat(row.EC_uScm)] },
+//                     { metal: "TDS_mgL", values: [parseFloat(row.TDS_mgL)] },
+//                     {
+//                       metal: "HPI_neighb",
+//                       values: [parseFloat(row.HPI_neighb)],
+//                     },
+//                     {
+//                       metal: "dist_to_riv",
+//                       values: [parseFloat(row.dist_to_riv)],
+//                     },
+//                     { metal: "river_HPI", values: [parseFloat(row.river_HPI)] },
+//                     {
+//                       metal: "industrial_HPI",
+//                       values: [parseFloat(row.industrial_HPI)],
+//                     },
+//                   ],
+//                   HPI: parseFloat(row.HPI),
+//                   HEI: null,
+//                   siteInterpretation: null,
+//                   siteImpact: null,
+//                   policyRecommendations: null,
+//                 },
+//               ],
+//             };
+
+//             // 🔥 Get AI analysis
+//             const aiResult = await analyzeWithGemini(siteDoc);
+//             siteDoc.tests[0].siteInterpretation = aiResult.siteInterpretation;
+//             siteDoc.tests[0].siteImpact = aiResult.siteImpact;
+//             siteDoc.tests[0].policyRecommendations =
+//               aiResult.policyRecommendations;
+
+//             siteDocs.push(siteDoc);
+//           }
+
+//           await Site.insertMany(siteDocs);
+
+//           res.json({
+//             message: "CSV uploaded & saved to DB with AI analysis",
+//             count: siteDocs.length,
+//           });
+//         });
+//     } catch (error) {
+//       console.error(error);
+//       res.status(500).json({ error: "Failed to process CSV" });
+//     }
+//   },
+// ];
+
+export const uploadCSV = [
   upload.single("file"),
   async (req, res) => {
     try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
       const results = [];
 
+      // Parse CSV
       fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on("data", (row) => results.push(row))
+        .on("data", (row) => {
+          results.push(row);
+        })
         .on("end", async () => {
-          const siteDocs = [];
+          try {
+            for (const row of results) {
+              const {
+                siteArea,
+                State,
+                siteCode,
+                lat,
+                lon,
+                date,
+                Pb,
+                Cd,
+                Zn,
+                Cu,
+                Ni,
+                Mn,
+                As,
+                Cr,
+              } = row;
 
-          for (const row of results) {
-            let siteDoc = {
-              siteArea: row.landuse,
-              State: "Maharashtra",
-              siteCode: row.id.toString(),
-              location: {
-                lat: parseFloat(row.lat),
-                lon: parseFloat(row.lon),
-              },
-              tests: [
-                {
-                  date: new Date(),
-                  metals: [
-                    { metal: "EC_uScm", values: [parseFloat(row.EC_uScm)] },
-                    { metal: "TDS_mgL", values: [parseFloat(row.TDS_mgL)] },
-                    { metal: "HPI_neighb", values: [parseFloat(row.HPI_neighb)] },
-                    { metal: "dist_to_riv", values: [parseFloat(row.dist_to_riv)] },
-                    { metal: "river_HPI", values: [parseFloat(row.river_HPI)] },
-                    { metal: "industrial_HPI", values: [parseFloat(row.industrial_HPI)] },
-                  ],
-                  HPI: parseFloat(row.HPI),
-                  HEI: null,
-                  siteInterpretation: null,
-                  siteImpact: null,
-                  policyRecommendations: null,
-                },
-              ],
-            };
+              // Prepare metals array dynamically
+              const metals = [];
+              const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
 
-            // 🔥 Get AI analysis
-            const aiResult = await analyzeWithGemini(siteDoc);
-            siteDoc.tests[0].siteInterpretation = aiResult.siteInterpretation;
-            siteDoc.tests[0].siteImpact = aiResult.siteImpact;
-            siteDoc.tests[0].policyRecommendations = aiResult.policyRecommendations;
+              for (const [metal, value] of Object.entries(metalMap)) {
+                if (value && !isNaN(value)) {
+                  metals.push({
+                    metal,
+                    values: Number(value),
+                  });
+                }
+              }
 
-            siteDocs.push(siteDoc);
+              // Prepare test object
+              const test = {
+                date: new Date(date),
+                metals,
+                HPI: null, // can calculate later
+                HEI: null,
+              };
+
+              // Upsert site
+              let site = await Site.findOne({ siteCode });
+
+              if (!site) {
+                site = new Site({
+                  siteArea,
+                  State,
+                  siteCode,
+                  location: { lat: Number(lat), lon: Number(lon) },
+                  tests: [test],
+                });
+              } else {
+                site.tests.push(test);
+              }
+
+              await site.save();
+            }
+
+            return res.json({
+              results,
+              message: "CSV data uploaded successfully",
+            });
+          } catch (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Error saving data to DB" });
           }
-
-          await Site.insertMany(siteDocs);
-
-          res.json({ message: "CSV uploaded & saved to DB with AI analysis", count: siteDocs.length });
         });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to process CSV" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
     }
   },
 ];

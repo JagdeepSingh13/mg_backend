@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const metalSchema = new mongoose.Schema({
   metal: { type: String, required: true },
-  values: [{ type: Number, required: true }],
+  values: { type: Number, required: true },
 });
 
 const daySchema = new mongoose.Schema({
@@ -20,7 +20,7 @@ const siteSchema = new mongoose.Schema({
   State: { type: String, required: true },
   siteCode: { type: String, required: true }, // integer IDs will be converted to string in controller
   location: {
-    lat: { type: Number, default: null },    // make optional to prevent NaN errors
+    lat: { type: Number, default: null }, // make optional to prevent NaN errors
     lon: { type: Number, default: null },
   },
   tests: [daySchema],
@@ -43,9 +43,9 @@ export default mongoose.model("Site", siteSchema);
 //     {
 //       "date": "2025-09-01T00:00:00.000Z",
 //       "metals": [
-//         { "metal": "Lead", "values": [12, 15, 14] },
-//         { "metal": "Cadmium", "values": [5, 6] },
-//         { "metal": "Zinc", "values": [12000, 11800, 11950] }
+//         { "metal": "Lead", "values": 12 },
+//         { "metal": "Cadmium", "values": 5 },
+//         { "metal": "Zinc", "values": 1200 }
 //       ],
 //       "HPI": 142.3,
 //       "HEI": 7.5,
