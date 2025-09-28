@@ -234,14 +234,19 @@ export const uploadCSV = [
 
 export const fetchMap = async (req, res) => {
   try {
+    const { state } = req.params; // get state from route param
+
     const sites = await Site.aggregate([
+      {
+        $match: { State: state }, // filter by State field
+      },
       {
         $project: {
           siteArea: 1,
           State: 1,
           siteCode: 1,
           location: 1,
-          latestTest: { $arrayElemAt: ["$tests", -1] }, // get last element
+          latestTest: { $arrayElemAt: ["$tests", -1] }, // last test in array
         },
       },
     ]);
@@ -294,6 +299,72 @@ export const siteTimeline = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching data for map:", error);
+    res.status(500).json({ message: "Server Error", error });
+  }
+};
+
+export const getOverview = async (req, res) => {
+  try {
+    const sites = await Site.aggregate([
+      // Flatten tests to handle individually
+      { $unwind: "$tests" },
+      // Sort by date desc
+      { $sort: { "tests.date": -1 } },
+      // Group back to keep only latest test per site
+      {
+        $group: {
+          _id: "$_id",
+          siteArea: { $first: "$siteArea" },
+          State: { $first: "$State" },
+          siteCode: { $first: "$siteCode" },
+          location: { $first: "$location" },
+          latestTest: { $first: "$tests" },
+        },
+      },
+      // Categorize into risk levels
+      {
+        $addFields: {
+          riskLevel: {
+            $switch: {
+              branches: [
+                { case: { $lt: ["$latestTest.HPI", 50] }, then: "Low" },
+                {
+                  case: {
+                    $and: [
+                      { $gte: ["$latestTest.HPI", 50] },
+                      { $lt: ["$latestTest.HPI", 100] },
+                    ],
+                  },
+                  then: "Medium",
+                },
+                { case: { $gte: ["$latestTest.HPI", 100] }, then: "High" },
+              ],
+              default: "Unknown",
+            },
+          },
+        },
+      },
+      // Group by riskLevel
+      {
+        $group: {
+          _id: "$riskLevel",
+          count: { $sum: 1 },
+          sites: {
+            $push: {
+              siteCode: "$siteCode",
+              siteArea: "$siteArea",
+              State: "$State",
+              location: "$location",
+              latestHPI: "$latestTest.HPI",
+            },
+          },
+        },
+      },
+    ]);
+
+    res.status(200).json({ success: true, riskSummary: sites });
+  } catch (error) {
+    console.error("Error fetching HPI risk summary:", error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
