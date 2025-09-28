@@ -1,10 +1,10 @@
 export const HPI_CONSTANTS = {
-  Zn: { Si: 15000, Ii: 5000 },
-  Cd: { Si: 10, Ii: 5 },
-  Pb: { Si: 15, Ii: 10 },
-  Cu: { Si: 1500, Ii: 50 },
-  Ni: { Si: 100, Ii: 20 },
-  Mn: { Si: 300, Ii: 100 },
-  As: { Si: 50, Ii: 10 },
-  Cr: { Si: 100, Ii: 1 },
+  Zn: { S: 15000, I: 5000 },
+  Cd: { S: 10, I: 5 },
+  Pb: { S: 15, I: 10 },
+  Cu: { S: 1500, I: 50 },
+  Ni: { S: 100, I: 20 },
+  Mn: { S: 300, I: 100 },
+  As: { S: 50, I: 10 },
+  Cr: { S: 100, I: 1 },
 };

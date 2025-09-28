@@ -3,6 +3,7 @@ import csv from "csv-parser";
 import fs from "fs";
 import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { calculateIndices } from "../utils/calcIndices.js";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -135,6 +136,7 @@ export const uploadCSV = [
           results.push(row);
         })
         .on("end", async () => {
+          const processedResults = [];
           try {
             for (const row of results) {
               const {
@@ -167,12 +169,14 @@ export const uploadCSV = [
                 }
               }
 
+              const { HPI, HEI } = calculateIndices(metals);
+
               // Prepare test object
               const test = {
                 date: new Date(date),
                 metals,
-                HPI: null, // can calculate later
-                HEI: null,
+                HPI,
+                HEI,
               };
 
               // Upsert site
@@ -191,10 +195,21 @@ export const uploadCSV = [
               }
 
               await site.save();
+
+              processedResults.push({
+                siteArea,
+                State,
+                siteCode,
+                lat,
+                lon,
+                date,
+                HPI,
+                HEI,
+              });
             }
 
             return res.json({
-              results,
+              processedResults,
               message: "CSV data uploaded successfully",
             });
           } catch (err) {
