@@ -3,26 +3,30 @@ import csv from "csv-parser";
 import fs from "fs";
 import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
-
+import { calculateIndices } from "../utils/calcIndices.js";
+import { HM_CONSTANTS } from "../utils/hpiConstants.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
 
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-async function analyzeWithGemini(siteData) {
+async function analyzeWithGemini(siteData, test) {
   const prompt = `
   You are an environmental analyst. Based on this site data, generate concise insights:
 
   Site Area: ${siteData.siteArea}
   State: ${siteData.State}
   Location: lat ${siteData.location.lat}, lon ${siteData.location.lon}
-  Metals: ${siteData.tests[0].metals.map(m => `${m.metal}: ${m.values[0]}`).join(", ")}
-  HPI: ${siteData.tests[0].HPI}
+  Metals: ${test.metals.map((m) => `${m.metal}: ${m.values}`).join(", ")}
+  HPI: ${test.HPI}
+  HEI: ${test.HEI}
 
-  Respond in JSON format with 3 fields:
+  Respond ONLY in JSON format with 3 fields:
   {
     "siteInterpretation": "2 line interpretation",
     "siteImpact": "2 line description of potential impact",
@@ -30,77 +34,154 @@ async function analyzeWithGemini(siteData) {
   }
   `;
 
-  const result = await model.generateContent(prompt);
-
   try {
-    return JSON.parse(result.response.text());
+    const result = await model.generateContent(prompt);
+    let text = result.response.text();
+
+    // Remove markdown code fences (```json ... ```)
+    text = text.replace(/```json|```/g, "").trim();
+
+    // Try to extract JSON block if extra text is present
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      text = jsonMatch[0];
+    }
+
+    // Parse safely
+    return JSON.parse(text);
   } catch (e) {
-    console.error("Gemini JSON parse error:", e);
+    console.error("Gemini JSON parse error:", e, "\nRaw Gemini output:", text);
     return {
       siteInterpretation: "Interpretation unavailable.",
       siteImpact: "Impact unavailable.",
-      policyRecommendations: "Recommendation unavailable."
+      policyRecommendations: "Recommendation unavailable.",
     };
   }
 }
 
-export const handleUpload = [
+export const uploadCSV = [
   upload.single("file"),
   async (req, res) => {
     try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
       const results = [];
 
+      // Parse CSV
       fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on("data", (row) => results.push(row))
+        .on("data", (row) => {
+          results.push(row);
+        })
         .on("end", async () => {
-          const siteDocs = [];
+          const processedResults = [];
+          try {
+            for (const row of results) {
+              const {
+                siteArea,
+                State,
+                siteCode,
+                lat,
+                lon,
+                date,
+                Pb,
+                Cd,
+                Zn,
+                Cu,
+                Ni,
+                Mn,
+                As,
+                Cr,
+              } = row;
 
-          for (const row of results) {
-            let siteDoc = {
-              siteArea: row.landuse,
-              State: "Maharashtra",
-              siteCode: row.id.toString(),
-              location: {
-                lat: parseFloat(row.lat),
-                lon: parseFloat(row.lon),
-              },
-              tests: [
-                {
-                  date: new Date(),
-                  metals: [
-                    { metal: "EC_uScm", values: [parseFloat(row.EC_uScm)] },
-                    { metal: "TDS_mgL", values: [parseFloat(row.TDS_mgL)] },
-                    { metal: "HPI_neighb", values: [parseFloat(row.HPI_neighb)] },
-                    { metal: "dist_to_riv", values: [parseFloat(row.dist_to_riv)] },
-                    { metal: "river_HPI", values: [parseFloat(row.river_HPI)] },
-                    { metal: "industrial_HPI", values: [parseFloat(row.industrial_HPI)] },
-                  ],
-                  HPI: parseFloat(row.HPI),
-                  HEI: null,
-                  siteInterpretation: null,
-                  siteImpact: null,
-                  policyRecommendations: null,
-                },
-              ],
-            };
+              // Prepare metals array dynamically
+              const metals = [];
+              const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
 
-            // 🔥 Get AI analysis
-            const aiResult = await analyzeWithGemini(siteDoc);
-            siteDoc.tests[0].siteInterpretation = aiResult.siteInterpretation;
-            siteDoc.tests[0].siteImpact = aiResult.siteImpact;
-            siteDoc.tests[0].policyRecommendations = aiResult.policyRecommendations;
+              for (const [metal, value] of Object.entries(metalMap)) {
+                if (value && !isNaN(value)) {
+                  const { S, B } = HM_CONSTANTS[metal] || {};
 
-            siteDocs.push(siteDoc);
+                  let CF = null;
+                  let Igeo = null;
+
+                  if (S) {
+                    CF = Math.round((Number(value) / S) * 1000) / 1000;
+                  }
+                  if (B) {
+                    Igeo =
+                      Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
+                      1000;
+                  }
+
+                  metals.push({
+                    metal,
+                    values: Number(value),
+                    CF,
+                    Igeo,
+                  });
+                }
+              }
+
+              const { HPI, HEI } = calculateIndices(metals);
+
+              let test = {
+                date: new Date(date),
+                metals,
+                HPI,
+                HEI,
+                siteInterpretation: null,
+                siteImpact: null,
+                policyRecommendations: null,
+              };
+
+              // Upsert site
+              let site = await Site.findOne({ siteCode });
+
+              if (!site) {
+                site = new Site({
+                  siteArea,
+                  State,
+                  siteCode,
+                  location: { lat: Number(lat), lon: Number(lon) },
+                  tests: [],
+                });
+              }
+
+              const aiAnalysis = await analyzeWithGemini(site, test);
+              test = { ...test, ...aiAnalysis };
+
+              site.tests.push(test);
+              await site.save();
+
+              processedResults.push({
+                siteArea,
+                State,
+                siteCode,
+                lat,
+                lon,
+                metals,
+                date,
+                HPI,
+                HEI,
+                aiAnalysis,
+              });
+            }
+
+            return res.json({
+              processedResults,
+              message: "CSV data uploaded successfully",
+            });
+          } catch (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Error saving data to DB" });
           }
-
-          await Site.insertMany(siteDocs);
-
-          res.json({ message: "CSV uploaded & saved to DB with AI analysis", count: siteDocs.length });
         });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to process CSV" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
     }
   },
 ];
