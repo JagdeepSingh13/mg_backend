@@ -28,14 +28,13 @@ export const fetchData = async (req, res) => {
           : latest;
       });
 
-      // return everything + latest test (with metals, HPI, HEI, etc.)
       const response = {
         _id: site._id,
         siteArea: site.siteArea,
         State: site.State,
         siteCode: site.siteCode,
         location: site.location,
-        latestTest, // contains metals + concentrations + indices
+        latestTest,
       };
 
       return res.json(response);
@@ -298,3 +297,5 @@ export const siteTimeline = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
+export const siteComparisons = async (req, res) => {};
