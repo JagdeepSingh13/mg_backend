@@ -1,3 +1,4 @@
+import dotenv from "dotenv";
 import multer from "multer";
 import csv from "csv-parser";
 import fs from "fs";
@@ -5,7 +6,6 @@ import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { calculateIndices } from "../utils/calcIndices.js";
 import { HM_CONSTANTS } from "../utils/hpiConstants.js";
-import dotenv from "dotenv";
 dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
@@ -56,8 +56,8 @@ export const fetchData = async (req, res) => {
 };
 
 // Gemini setup
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI("AIzaSyDtyobWou_ixfjz2RmSaGRJyL93PQWlbkk");
+console.log("Gemini API Key:");
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 async function analyzeWithGemini(siteData, test) {
@@ -101,6 +101,42 @@ async function analyzeWithGemini(siteData, test) {
       siteInterpretation: "Interpretation unavailable.",
       siteImpact: "Impact unavailable.",
       policyRecommendations: "Recommendation unavailable.",
+    };
+  }
+}
+
+// Gemini index findings for metals
+async function analyzeIndicesWithGemini(siteData, test) {
+  const prompt = `
+  You are an environmental analyst. Given the following metal indices for a site, generate concise findings:
+
+  Metals:
+  ${test.metals.map((m) => `${m.metal}: Igeo=${m.Igeo}, CF=${m.CF}, EF=${m.EF}, ERI=${m.ERI}`).join("\n")}
+
+  Respond ONLY in JSON format with four fields:
+  {
+    "igeo_Finding": "Brief interpretation of Igeo values",
+    "cf_Finding": "Brief interpretation of CF values",
+    "ef_Finding": "Brief interpretation of EF values",
+    "eri_Finding": "Brief interpretation of ERI values"
+  }
+  `;
+
+  let text = "";
+  try {
+    const result = await model.generateContent(prompt);
+    text = result.response.text();
+    text = text.replace(/```json|```/g, "").trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) text = jsonMatch[0];
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Gemini index findings parse error:", e, "\nRaw Gemini output:", text);
+    return {
+      igeo_Finding: "Interpretation unavailable",
+      cf_Finding: "Interpretation unavailable",
+      ef_Finding: "Interpretation unavailable",
+      eri_Finding: "Interpretation unavailable",
     };
   }
 }
@@ -152,14 +188,25 @@ export const uploadCSV = [
 
                   let CF = null;
                   let Igeo = null;
+                  let EF = null;
+                  let ERI = null;
 
                   if (S) {
                     CF = Math.round((Number(value) / S) * 1000) / 1000;
                   }
                   if (B) {
                     Igeo =
-                      Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
-                      1000;
+                      Math.round(
+                        Math.log2(Number(value) / (1.5 * B)) * 1000
+                      ) / 1000;
+
+                    // EF = C / B
+                    EF = Math.round((Number(value) / B) * 1000) / 1000;
+                  }
+
+                  // ERI = CF × C
+                  if (CF !== null) {
+                    ERI = Math.round(CF * Number(value) * 1000) / 1000;
                   }
 
                   metals.push({
@@ -167,9 +214,11 @@ export const uploadCSV = [
                     values: Number(value),
                     CF,
                     Igeo,
+                    EF,
+                    ERI,
                   });
                 }
-              }
+              } // ✅ closed metals loop properly
 
               const { HPI, HEI } = calculateIndices(metals);
 
@@ -197,7 +246,10 @@ export const uploadCSV = [
               }
 
               const aiAnalysis = await analyzeWithGemini(site, test);
-              test = { ...test, ...aiAnalysis };
+              const indexFindings = await analyzeIndicesWithGemini(site, test);
+
+              // Merge all findings into test
+              test = { ...test, ...aiAnalysis, ...indexFindings };
 
               site.tests.push(test);
               await site.save();
@@ -213,6 +265,7 @@ export const uploadCSV = [
                 HPI,
                 HEI,
                 aiAnalysis,
+                indexFindings,
               });
             }
 

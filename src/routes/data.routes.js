@@ -4,7 +4,6 @@ import {
   fetchData,
   fetchMap,
   siteTimeline,
-  siteComparisons,
 } from "../controllers/data.controllers.js";
 
 const router = Router();
@@ -18,7 +17,5 @@ router.get("/site/:siteCode", fetchData); // only this
 router.get("/map", fetchMap);
 
 router.get("/timeline/:siteCode", siteTimeline);
-
-router.get("/comparison/:siteCodeOne/:siteCodeTwo", siteComparisons);
 
 export default router;
