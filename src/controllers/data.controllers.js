@@ -10,12 +10,10 @@ dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
 
-
-
 export const fetchData = async (req, res) => {
   try {
     siteCode = req.param;
-    const sites = await Site.find({sitec}); // get everything from DB
+    const sites = await Site.find({ sitec }); // get everything from DB
     console.log("Fetched sites from DB:", sites); // <--- log results
     res.json(sites); // return as JSON
   } catch (error) {
@@ -23,8 +21,6 @@ export const fetchData = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
-
-
 
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -202,3 +198,69 @@ export const uploadCSV = [
     }
   },
 ];
+
+export const fetchMap = async (req, res) => {
+  try {
+    const sites = await Site.aggregate([
+      {
+        $project: {
+          siteArea: 1,
+          State: 1,
+          siteCode: 1,
+          location: 1,
+          latestTest: { $arrayElemAt: ["$tests", -1] }, // get last element
+        },
+      },
+    ]);
+
+    res.status(200).json({ success: true, sites });
+  } catch (error) {
+    console.error("Error fetching data for map:", error);
+    res.status(500).json({ message: "Server Error", error });
+  }
+};
+
+export const siteTimeline = async (req, res) => {
+  try {
+    const { siteCode } = req.params;
+
+    const site = await Site.findOne({ siteCode });
+
+    if (!site) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Site not found" });
+    }
+
+    const tests = [...site.tests].sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
+
+    // Group tests year-wise
+    const grouped = tests.reduce((acc, test) => {
+      const yearKey = new Date(test.date).getFullYear().toString(); // "2025"
+      if (!acc[yearKey]) acc[yearKey] = [];
+      acc[yearKey].push({
+        date: test.date,
+        HPI: test.HPI,
+        HEI: test.HEI,
+        metals: test.metals,
+      });
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      site: {
+        siteArea: site.siteArea,
+        State: site.State,
+        siteCode: site.siteCode,
+        location: site.location,
+      },
+      timeline: grouped,
+    });
+  } catch (error) {
+    console.error("Error fetching data for map:", error);
+    res.status(500).json({ message: "Server Error", error });
+  }
+};
