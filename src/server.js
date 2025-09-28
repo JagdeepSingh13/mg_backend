@@ -4,7 +4,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const PORT = 5000;
-const MONGO_URI = "mongodb+srv://gouravt039:123@cluster0.pkej62h.mongodb.net/";
+const MONGO_URI =
+  "mongodb+srv://jagdeeps3105:jagdeeps3105@cluster0.oitrx8g.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
 mongoose
   .connect(MONGO_URI, {
