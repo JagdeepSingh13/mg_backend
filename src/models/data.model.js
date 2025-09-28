@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 const metalSchema = new mongoose.Schema({
   metal: { type: String, required: true },
   values: { type: Number, required: true },
+  CF: { type: Number, default: null },
+  Igeo: { type: Number, default: null },
 });
 
 const daySchema = new mongoose.Schema({

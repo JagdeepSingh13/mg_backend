@@ -4,6 +4,7 @@ import fs from "fs";
 import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { calculateIndices } from "../utils/calcIndices.js";
+import { HM_CONSTANTS } from "../utils/hpiConstants.js";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -162,9 +163,25 @@ export const uploadCSV = [
 
               for (const [metal, value] of Object.entries(metalMap)) {
                 if (value && !isNaN(value)) {
+                  const { S, B } = HM_CONSTANTS[metal] || {};
+
+                  let CF = null;
+                  let Igeo = null;
+
+                  if (S) {
+                    CF = Math.round((Number(value) / S) * 1000) / 1000;
+                  }
+                  if (B) {
+                    Igeo =
+                      Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
+                      1000;
+                  }
+
                   metals.push({
                     metal,
                     values: Number(value),
+                    CF,
+                    Igeo,
                   });
                 }
               }
@@ -202,6 +219,7 @@ export const uploadCSV = [
                 siteCode,
                 lat,
                 lon,
+                metals,
                 date,
                 HPI,
                 HEI,

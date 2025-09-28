@@ -1,4 +1,4 @@
-import { HPI_CONSTANTS } from "./hpiConstants.js";
+import { HM_CONSTANTS } from "./hpiConstants.js";
 
 export function calculateIndices(metals) {
   let sumWiQi = 0;
@@ -7,7 +7,7 @@ export function calculateIndices(metals) {
 
   for (const { metal, values } of metals) {
     const M = values;
-    const { S, I } = HPI_CONSTANTS[metal] || {};
+    const { S, I } = HM_CONSTANTS[metal] || {};
 
     if (!S || !I) continue; // skip metals not in constants
 
