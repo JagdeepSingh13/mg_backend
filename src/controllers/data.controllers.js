@@ -10,8 +10,6 @@ dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
 
-<<<<<<< HEAD
-
 export const fetchData = async (req, res) => {
   try {
     const { siteCode } = req.params;
@@ -25,7 +23,9 @@ export const fetchData = async (req, res) => {
     if (site.tests && site.tests.length > 0) {
       // ✅ get latest test by date
       const latestTest = site.tests.reduce((latest, current) => {
-        return new Date(current.date) > new Date(latest.date) ? current : latest;
+        return new Date(current.date) > new Date(latest.date)
+          ? current
+          : latest;
       });
 
       // return everything + latest test (with metals, HPI, HEI, etc.)
@@ -50,28 +50,12 @@ export const fetchData = async (req, res) => {
       location: site.location,
       latestTest: null,
     });
-
-=======
-export const fetchData = async (req, res) => {
-  try {
-    siteCode = req.param;
-    const sites = await Site.find({ sitec }); // get everything from DB
-    console.log("Fetched sites from DB:", sites); // <--- log results
-    res.json(sites); // return as JSON
->>>>>>> 6cbb759e7d010ffc393b8bbd59f9bf779e328009
   } catch (error) {
-    console.error("Error fetching data:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error("Error fetching site data:", error);
+    res.status(500).json({ message: "Server Error", error });
   }
 };
 
-<<<<<<< HEAD
-
-
-
-
-=======
->>>>>>> 6cbb759e7d010ffc393b8bbd59f9bf779e328009
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
@@ -314,5 +298,3 @@ export const siteTimeline = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
-
-export const siteComparisons = async (req, res) => {};
