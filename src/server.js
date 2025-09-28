@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const PORT = 5000;
-const MONGO_URI = "mongodb://localhost:27017/";
+const MONGO_URI = "mongodb+srv://gouravt039:123@cluster0.pkej62h.mongodb.net/";
 
 mongoose
   .connect(MONGO_URI, {

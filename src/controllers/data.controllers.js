@@ -10,6 +10,22 @@ dotenv.config();
 
 const upload = multer({ dest: "uploads/" });
 
+
+
+export const fetchData = async (req, res) => {
+  try {
+    siteCode = req.param;
+    const sites = await Site.find({sitec}); // get everything from DB
+    console.log("Fetched sites from DB:", sites); // <--- log results
+    res.json(sites); // return as JSON
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    res.status(500).json({ message: "Server Error", error });
+  }
+};
+
+
+
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
@@ -34,9 +50,10 @@ async function analyzeWithGemini(siteData, test) {
   }
   `;
 
+  let text = "";
   try {
     const result = await model.generateContent(prompt);
-    let text = result.response.text();
+    text = result.response.text();
 
     // Remove markdown code fences (```json ... ```)
     text = text.replace(/```json|```/g, "").trim();
