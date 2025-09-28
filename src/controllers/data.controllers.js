@@ -23,9 +23,7 @@ export const fetchData = async (req, res) => {
     if (site.tests && site.tests.length > 0) {
       // ✅ get latest test by date
       const latestTest = site.tests.reduce((latest, current) => {
-        return new Date(current.date) > new Date(latest.date)
-          ? current
-          : latest;
+        return new Date(current.date) > new Date(latest.date) ? current : latest;
       });
 
       const response = {
@@ -34,26 +32,27 @@ export const fetchData = async (req, res) => {
         State: site.State,
         siteCode: site.siteCode,
         location: site.location,
-        latestTest,
+        latestTest, // contains metals + concentrations + indices
       };
 
       return res.json(response);
     }
 
     // if no tests found
-    res.json({
-      _id: site._id,
-      siteArea: site.siteArea,
-      State: site.State,
-      siteCode: site.siteCode,
-      location: site.location,
-      latestTest: null,
-    });
-  } catch (error) {
-    console.error("Error fetching site data:", error);
-    res.status(500).json({ message: "Server Error", error });
-  }
-};
+        res.json({
+          _id: site._id,
+          siteArea: site.siteArea,
+          State: site.State,
+          siteCode: site.siteCode,
+          location: site.location,
+          latestTest: null,
+        });
+      } catch (error) {
+        console.error("Error fetching site data:", error);
+        res.status(500).json({ message: "Server Error", error });
+      }
+    }
+
 
 // Gemini setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -298,4 +297,3 @@ export const siteTimeline = async (req, res) => {
   }
 };
 
-export const siteComparisons = async (req, res) => {};
