@@ -111,7 +111,11 @@ async function analyzeIndicesWithGemini(siteData, test) {
   You are an environmental analyst. Given the following metal indices for a site, generate concise findings:
 
   Metals:
-  ${test.metals.map((m) => `${m.metal}: Igeo=${m.Igeo}, CF=${m.CF}, EF=${m.EF}, ERI=${m.ERI}`).join("\n")}
+  ${test.metals
+    .map(
+      (m) => `${m.metal}: Igeo=${m.Igeo}, CF=${m.CF}, EF=${m.EF}, ERI=${m.ERI}`
+    )
+    .join("\n")}
 
   Respond ONLY in JSON format with four fields:
   {
@@ -131,7 +135,12 @@ async function analyzeIndicesWithGemini(siteData, test) {
     if (jsonMatch) text = jsonMatch[0];
     return JSON.parse(text);
   } catch (e) {
-    console.error("Gemini index findings parse error:", e, "\nRaw Gemini output:", text);
+    console.error(
+      "Gemini index findings parse error:",
+      e,
+      "\nRaw Gemini output:",
+      text
+    );
     return {
       igeo_Finding: "Interpretation unavailable",
       cf_Finding: "Interpretation unavailable",
@@ -158,7 +167,7 @@ export const uploadCSV = [
           results.push(row);
         })
         .on("end", async () => {
-          const processedResults = [];
+          const data = [];
           try {
             for (const row of results) {
               const {
@@ -196,9 +205,8 @@ export const uploadCSV = [
                   }
                   if (B) {
                     Igeo =
-                      Math.round(
-                        Math.log2(Number(value) / (1.5 * B)) * 1000
-                      ) / 1000;
+                      Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
+                      1000;
 
                     // EF = C / B
                     EF = Math.round((Number(value) / B) * 1000) / 1000;
@@ -254,7 +262,7 @@ export const uploadCSV = [
               site.tests.push(test);
               await site.save();
 
-              processedResults.push({
+              data.push({
                 siteArea,
                 State,
                 siteCode,
@@ -270,7 +278,7 @@ export const uploadCSV = [
             }
 
             return res.status(200).json({
-              processedResults,
+              data,
               message: "CSV data uploaded successfully",
             });
           } catch (err) {

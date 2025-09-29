@@ -1,6 +1,2 @@
 siteArea,State,siteCode,lat,lon,date,Pb,Cd,Zn,Cu,Ni,Mn,As,Cr
-<<<<<<< HEAD
-Pune Bhosari,Maharashtra,PN-005,18.5204,73.8567,2025-09-01,15,6,11800,70,12,210,22,5
-=======
-Pune bosdi,Maharashtra,PN-005,18.5204,73.8567,2025-10-01,15,6,11800,70,12,210,22,5
->>>>>>> 764a3f68b7e2f8b1d0cfad02cddc4936e0f2e1db
+Pune City,Maharashtra,PN-015,19.5204,72.8567,2025-09-01,15,6,11800,70,12,210,22,5

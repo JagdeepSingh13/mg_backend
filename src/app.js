@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import dataRoutes from "./routes/data.routes.js";
+import userRouter from "./routes/user.routes.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 
@@ -24,7 +27,8 @@ app.get("/api/v1/hello", (req, res) => {
   res.json({ message: "Hello World from backend!" });
 });
 
-// ✅ CSV Upload route
 app.use("/api/data", dataRoutes);
+
+app.use("/api/v1/users", userRouter);
 
 export { app };
