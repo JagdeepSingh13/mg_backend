@@ -150,7 +150,150 @@ async function analyzeIndicesWithGemini(siteData, test) {
   }
 }
 
-export const uploadCSV = [
+// export const uploadCSV = [
+//   upload.single("file"),
+//   async (req, res) => {
+//     try {
+//       if (!req.file) {
+//         return res.status(400).json({ error: "No file uploaded" });
+//       }
+
+//       const results = [];
+
+//       // Parse CSV
+//       fs.createReadStream(req.file.path)
+//         .pipe(csv())
+//         .on("data", (row) => {
+//           results.push(row);
+//         })
+//         .on("end", async () => {
+//           const data = [];
+//           try {
+//             for (const row of results) {
+//               const {
+//                 siteArea,
+//                 State,
+//                 siteCode,
+//                 lat,
+//                 lon,
+//                 date,
+//                 Pb,
+//                 Cd,
+//                 Zn,
+//                 Cu,
+//                 Ni,
+//                 Mn,
+//                 As,
+//                 Cr,
+//               } = row;
+
+//               // Prepare metals array dynamically
+//               const metals = [];
+//               const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
+
+//               for (const [metal, value] of Object.entries(metalMap)) {
+//                 if (value && !isNaN(value)) {
+//                   const { S, B } = HM_CONSTANTS[metal] || {};
+
+//                   let CF = null;
+//                   let Igeo = null;
+//                   let EF = null;
+//                   let ERI = null;
+
+//                   if (S) {
+//                     CF = Math.round((Number(value) / S) * 1000) / 1000;
+//                   }
+//                   if (B) {
+//                     Igeo =
+//                       Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
+//                       1000;
+
+//                     // EF = C / B
+//                     EF = Math.round((Number(value) / B) * 1000) / 1000;
+//                   }
+
+//                   // ERI = CF × C
+//                   if (CF !== null) {
+//                     ERI = Math.round(CF * Number(value) * 1000) / 1000;
+//                   }
+
+//                   metals.push({
+//                     metal,
+//                     values: Number(value),
+//                     CF,
+//                     Igeo,
+//                     EF,
+//                     ERI,
+//                   });
+//                 }
+//               } // ✅ closed metals loop properly
+
+//               const { HPI, HEI } = calculateIndices(metals);
+
+//               let test = {
+//                 date: new Date(date),
+//                 metals,
+//                 HPI,
+//                 HEI,
+//                 siteInterpretation: null,
+//                 siteImpact: null,
+//                 policyRecommendations: null,
+//               };
+
+//               // Upsert site
+//               let site = await Site.findOne({ siteCode });
+
+//               if (!site) {
+//                 site = new Site({
+//                   siteArea,
+//                   State,
+//                   siteCode,
+//                   location: { lat: Number(lat), lon: Number(lon) },
+//                   tests: [],
+//                 });
+//               }
+
+//               const aiAnalysis = await analyzeWithGemini(site, test);
+//               const indexFindings = await analyzeIndicesWithGemini(site, test);
+
+//               // Merge all findings into test
+//               test = { ...test, ...aiAnalysis, ...indexFindings };
+
+//               site.tests.push(test);
+//               await site.save();
+
+//               data.push({
+//                 siteArea,
+//                 State,
+//                 siteCode,
+//                 lat,
+//                 lon,
+//                 metals,
+//                 date,
+//                 HPI,
+//                 HEI,
+//                 aiAnalysis,
+//                 indexFindings,
+//               });
+//             }
+
+//             return res.status(200).json({
+//               data,
+//               message: "CSV data uploaded successfully",
+//             });
+//           } catch (err) {
+//             console.error(err);
+//             return res.status(500).json({ error: "Error saving data to DB" });
+//           }
+//         });
+//     } catch (err) {
+//       console.error(err);
+//       res.status(500).json({ error: "Server error" });
+//     }
+//   },
+// ];
+
+export const uploadCSVRaw = [
   upload.single("file"),
   async (req, res) => {
     try {
@@ -160,12 +303,9 @@ export const uploadCSV = [
 
       const results = [];
 
-      // Parse CSV
       fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on("data", (row) => {
-          results.push(row);
-        })
+        .on("data", (row) => results.push(row))
         .on("end", async () => {
           const data = [];
           try {
@@ -187,7 +327,7 @@ export const uploadCSV = [
                 Cr,
               } = row;
 
-              // Prepare metals array dynamically
+              // Prepare metals
               const metals = [];
               const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
 
@@ -200,22 +340,12 @@ export const uploadCSV = [
                   let EF = null;
                   let ERI = null;
 
-                  if (S) {
-                    CF = Math.round((Number(value) / S) * 1000) / 1000;
-                  }
+                  if (S) CF = +(Number(value) / S).toFixed(3);
                   if (B) {
-                    Igeo =
-                      Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
-                      1000;
-
-                    // EF = C / B
-                    EF = Math.round((Number(value) / B) * 1000) / 1000;
+                    Igeo = +Math.log2(Number(value) / (1.5 * B)).toFixed(3);
+                    EF = +(Number(value) / B).toFixed(3);
                   }
-
-                  // ERI = CF × C
-                  if (CF !== null) {
-                    ERI = Math.round(CF * Number(value) * 1000) / 1000;
-                  }
+                  if (CF !== null) ERI = +(CF * Number(value)).toFixed(3);
 
                   metals.push({
                     metal,
@@ -226,7 +356,7 @@ export const uploadCSV = [
                     ERI,
                   });
                 }
-              } // ✅ closed metals loop properly
+              }
 
               const { HPI, HEI } = calculateIndices(metals);
 
@@ -240,9 +370,7 @@ export const uploadCSV = [
                 policyRecommendations: null,
               };
 
-              // Upsert site
               let site = await Site.findOne({ siteCode });
-
               if (!site) {
                 site = new Site({
                   siteArea,
@@ -252,12 +380,6 @@ export const uploadCSV = [
                   tests: [],
                 });
               }
-
-              const aiAnalysis = await analyzeWithGemini(site, test);
-              const indexFindings = await analyzeIndicesWithGemini(site, test);
-
-              // Merge all findings into test
-              test = { ...test, ...aiAnalysis, ...indexFindings };
 
               site.tests.push(test);
               await site.save();
@@ -272,18 +394,16 @@ export const uploadCSV = [
                 date,
                 HPI,
                 HEI,
-                aiAnalysis,
-                indexFindings,
               });
             }
 
             return res.status(200).json({
               data,
-              message: "CSV data uploaded successfully",
+              message: "CSV data uploaded successfully (raw, no AI)",
             });
           } catch (err) {
             console.error(err);
-            return res.status(500).json({ error: "Error saving data to DB" });
+            return res.status(500).json({ error: "Error saving raw data" });
           }
         });
     } catch (err) {
@@ -292,6 +412,56 @@ export const uploadCSV = [
     }
   },
 ];
+
+export const generateAIInsights = async (req, res) => {
+  try {
+    const { siteCode } = req.params;
+
+    const site = await Site.findOne({ siteCode });
+    if (!site) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+
+    // Get latest test
+    const latestTest = site.tests.sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    )[0];
+
+    if (!latestTest) {
+      return res
+        .status(400)
+        .json({ error: "No tests available for this site" });
+    }
+
+    // Run Gemini on existing data
+    const aiAnalysis = await analyzeWithGemini(site, latestTest);
+    const indexFindings = await analyzeIndicesWithGemini(site, latestTest);
+
+    // Update main AI insights
+    latestTest.siteInterpretation = aiAnalysis.siteInterpretation;
+    latestTest.siteImpact = aiAnalysis.siteImpact;
+    latestTest.policyRecommendations = aiAnalysis.policyRecommendations;
+
+    // Save index findings into schema fields
+    if (indexFindings) {
+      latestTest.igeo_Finding = indexFindings.igeo_Finding;
+      latestTest.cf_Finding = indexFindings.cf_Finding;
+      latestTest.ef_Finding = indexFindings.ef_Finding;
+      latestTest.eri_Finding = indexFindings.eri_Finding;
+    }
+
+    await site.save();
+
+    res.status(200).json({
+      message: "AI insights generated successfully",
+      siteCode,
+      latestTest,
+    });
+  } catch (error) {
+    console.error("Error generating AI insights:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
 
 export const fetchMap = async (req, res) => {
   try {
