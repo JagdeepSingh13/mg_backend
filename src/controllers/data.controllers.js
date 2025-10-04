@@ -55,45 +55,64 @@ export const fetchData = async (req, res) => {
   }
 };
 
-// Gemini setup
-const genAI = new GoogleGenerativeAI("AIzaSyDtyobWou_ixfjz2RmSaGRJyL93PQWlbkk");
-console.log("Gemini API Key:");
+// Gemini setup (use env var if provided, otherwise fallback to built-in key)
+const GEMINI_API_KEY =
+  process.env.GEMINI_API_KEY ||
+  process.env.GOOGLE_API_KEY ||
+  "AIzaSyB-0X1YdbCDLc3_1VdkUdncj2jT9ex8Wws";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+function withTimeout(promise, ms, onTimeoutMessage = "AI request timed out") {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(onTimeoutMessage)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 async function analyzeWithGemini(siteData, test) {
+  const metalsList = ["Pb", "Cd", "Zn", "Cu", "Ni", "Mn", "As", "Cr"];
+
   const prompt = `
-  You are an environmental analyst. Based on this site data, generate concise insights:
+  You are an environmental analyst. Based on this site data, generate concise insights and numeric future predictions:
 
   Site Area: ${siteData.siteArea}
   State: ${siteData.State}
   Location: lat ${siteData.location.lat}, lon ${siteData.location.lon}
-  Metals: ${test.metals.map((m) => `${m.metal}: ${m.values}`).join(", ")}
+  Date: ${test.date}
+  Metals (mg/L): 
+  ${test.metals.map((m) => `${m.metal}: ${m.values}`).join(", ")}
   HPI: ${test.HPI}
   HEI: ${test.HEI}
 
-  Respond ONLY in JSON format with 3 fields:
+  Respond ONLY in JSON format with this structure:
   {
     "siteInterpretation": "2 line interpretation",
     "siteImpact": "2 line description of potential impact",
-    "policyRecommendations": "2 line recommendation for policy makers"
+    "policyRecommendations": "3.5 line recommendation for policy makers",
+    "baselinePrediction": " a plain string with all the predicted values of all metals assuming the recommended policies are applied effectively",
+    "withPolicyPrediction": "a plain string with all the values of metals",
+    "effectOfPolicy": "2 lines explaining how policies could change metal concentrations and risks"
   }
+
+  Rules:
+  - BaselinePrediction = extrapolated numeric values based only on current data, assuming no policies are applied.
+  - WithPolicyPrediction = numeric values assuming the recommended policies are applied effectively.
+  - Predictions must always include ALL metals (Pb, Cd, Zn, Cu, Ni, Mn, As, Cr) even if their current value is missing.
+  - Predictions must be numeric (no text like 'slight increase').
+  - Keep predictions realistic: within ±20% of current values unless strong justification.
   `;
 
   let text = "";
   try {
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(model.generateContent(prompt), 30000);
     text = result.response.text();
 
-    // Remove markdown code fences (```json ... ```)
+    // Clean JSON
     text = text.replace(/```json|```/g, "").trim();
-
-    // Try to extract JSON block if extra text is present
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      text = jsonMatch[0];
-    }
+    if (jsonMatch) text = jsonMatch[0];
 
-    // Parse safely
     return JSON.parse(text);
   } catch (e) {
     console.error("Gemini JSON parse error:", e, "\nRaw Gemini output:", text);
@@ -101,6 +120,9 @@ async function analyzeWithGemini(siteData, test) {
       siteInterpretation: "Interpretation unavailable.",
       siteImpact: "Impact unavailable.",
       policyRecommendations: "Recommendation unavailable.",
+      baselinePrediction: "baselinePrediction unavailable",
+      withPolicyPrediction: "withPolicyPrediction unavailable",
+      effectOfPolicy: "Unavailable.",
     };
   }
 }
@@ -126,9 +148,18 @@ async function analyzeIndicesWithGemini(siteData, test) {
   }
   `;
 
+  if (!model) {
+    return {
+      igeo_Finding: "Interpretation unavailable",
+      cf_Finding: "Interpretation unavailable",
+      ef_Finding: "Interpretation unavailable",
+      eri_Finding: "Interpretation unavailable",
+    };
+  }
+
   let text = "";
   try {
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(model.generateContent(prompt), 30000);
     text = result.response.text();
     text = text.replace(/```json|```/g, "").trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -149,149 +180,6 @@ async function analyzeIndicesWithGemini(siteData, test) {
     };
   }
 }
-
-// export const uploadCSV = [
-//   upload.single("file"),
-//   async (req, res) => {
-//     try {
-//       if (!req.file) {
-//         return res.status(400).json({ error: "No file uploaded" });
-//       }
-
-//       const results = [];
-
-//       // Parse CSV
-//       fs.createReadStream(req.file.path)
-//         .pipe(csv())
-//         .on("data", (row) => {
-//           results.push(row);
-//         })
-//         .on("end", async () => {
-//           const data = [];
-//           try {
-//             for (const row of results) {
-//               const {
-//                 siteArea,
-//                 State,
-//                 siteCode,
-//                 lat,
-//                 lon,
-//                 date,
-//                 Pb,
-//                 Cd,
-//                 Zn,
-//                 Cu,
-//                 Ni,
-//                 Mn,
-//                 As,
-//                 Cr,
-//               } = row;
-
-//               // Prepare metals array dynamically
-//               const metals = [];
-//               const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
-
-//               for (const [metal, value] of Object.entries(metalMap)) {
-//                 if (value && !isNaN(value)) {
-//                   const { S, B } = HM_CONSTANTS[metal] || {};
-
-//                   let CF = null;
-//                   let Igeo = null;
-//                   let EF = null;
-//                   let ERI = null;
-
-//                   if (S) {
-//                     CF = Math.round((Number(value) / S) * 1000) / 1000;
-//                   }
-//                   if (B) {
-//                     Igeo =
-//                       Math.round(Math.log2(Number(value) / (1.5 * B)) * 1000) /
-//                       1000;
-
-//                     // EF = C / B
-//                     EF = Math.round((Number(value) / B) * 1000) / 1000;
-//                   }
-
-//                   // ERI = CF × C
-//                   if (CF !== null) {
-//                     ERI = Math.round(CF * Number(value) * 1000) / 1000;
-//                   }
-
-//                   metals.push({
-//                     metal,
-//                     values: Number(value),
-//                     CF,
-//                     Igeo,
-//                     EF,
-//                     ERI,
-//                   });
-//                 }
-//               } // ✅ closed metals loop properly
-
-//               const { HPI, HEI } = calculateIndices(metals);
-
-//               let test = {
-//                 date: new Date(date),
-//                 metals,
-//                 HPI,
-//                 HEI,
-//                 siteInterpretation: null,
-//                 siteImpact: null,
-//                 policyRecommendations: null,
-//               };
-
-//               // Upsert site
-//               let site = await Site.findOne({ siteCode });
-
-//               if (!site) {
-//                 site = new Site({
-//                   siteArea,
-//                   State,
-//                   siteCode,
-//                   location: { lat: Number(lat), lon: Number(lon) },
-//                   tests: [],
-//                 });
-//               }
-
-//               const aiAnalysis = await analyzeWithGemini(site, test);
-//               const indexFindings = await analyzeIndicesWithGemini(site, test);
-
-//               // Merge all findings into test
-//               test = { ...test, ...aiAnalysis, ...indexFindings };
-
-//               site.tests.push(test);
-//               await site.save();
-
-//               data.push({
-//                 siteArea,
-//                 State,
-//                 siteCode,
-//                 lat,
-//                 lon,
-//                 metals,
-//                 date,
-//                 HPI,
-//                 HEI,
-//                 aiAnalysis,
-//                 indexFindings,
-//               });
-//             }
-
-//             return res.status(200).json({
-//               data,
-//               message: "CSV data uploaded successfully",
-//             });
-//           } catch (err) {
-//             console.error(err);
-//             return res.status(500).json({ error: "Error saving data to DB" });
-//           }
-//         });
-//     } catch (err) {
-//       console.error(err);
-//       res.status(500).json({ error: "Server error" });
-//     }
-//   },
-// ];
 
 export const uploadCSVRaw = [
   upload.single("file"),
@@ -423,9 +311,11 @@ export const generateAIInsights = async (req, res) => {
     }
 
     // Get latest test
-    const latestTest = site.tests.sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
-    )[0];
+    // not latest test but the the test just uploaded
+    // const latestTest = site.tests.sort(
+    //   (a, b) => new Date(b.date) - new Date(a.date)
+    // )[0];
+    const latestTest = site.tests[site.tests.length - 1];
 
     if (!latestTest) {
       return res
@@ -433,14 +323,28 @@ export const generateAIInsights = async (req, res) => {
         .json({ error: "No tests available for this site" });
     }
 
-    // Run Gemini on existing data
-    const aiAnalysis = await analyzeWithGemini(site, latestTest);
-    const indexFindings = await analyzeIndicesWithGemini(site, latestTest);
+    // Run Gemini on existing data (only if model configured)
+    let aiAnalysis = {
+      siteInterpretation: null,
+      siteImpact: null,
+      policyRecommendations: null,
+      baselinePrediction: null,
+      withPolicyPrediction: null,
+      effectOfPolicy: null,
+    };
+    let indexFindings = null;
+    if (model) {
+      aiAnalysis = await analyzeWithGemini(site, latestTest);
+      indexFindings = await analyzeIndicesWithGemini(site, latestTest);
+    }
 
     // Update main AI insights
     latestTest.siteInterpretation = aiAnalysis.siteInterpretation;
     latestTest.siteImpact = aiAnalysis.siteImpact;
     latestTest.policyRecommendations = aiAnalysis.policyRecommendations;
+    latestTest.baselinePrediction = aiAnalysis.baselinePrediction;
+    latestTest.withPolicyPrediction = aiAnalysis.withPolicyPrediction;
+    latestTest.effectOfPolicy = aiAnalysis.effectOfPolicy;
 
     // Save index findings into schema fields
     if (indexFindings) {
@@ -455,7 +359,7 @@ export const generateAIInsights = async (req, res) => {
     res.status(200).json({
       message: "AI insights generated successfully",
       siteCode,
-      latestTest,
+      aidata: latestTest,
     });
   } catch (error) {
     console.error("Error generating AI insights:", error);
@@ -465,7 +369,7 @@ export const generateAIInsights = async (req, res) => {
 
 export const fetchMap = async (req, res) => {
   try {
-    const { state } = req.params; // get state from route param
+    const { state } = req.params;
 
     const sites = await Site.aggregate([
       {
