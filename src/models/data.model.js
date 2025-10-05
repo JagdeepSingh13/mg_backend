@@ -24,6 +24,7 @@ const daySchema = new mongoose.Schema({
   baselinePrediction: { type: String, default: null },
   withPolicyPrediction: { type: String, default: null },
   effectOfPolicy: { type: String, default: null },
+  season: {type: String, default:null}
 });
 
 const siteSchema = new mongoose.Schema({

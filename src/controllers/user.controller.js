@@ -26,35 +26,47 @@ const generateAccessAndRefreshTokens = async (userId) => {
 };
 
 const registerUser = asyncHandler(async (req, res) => {
+  console.log("=== REGISTER USER CONTROLLER CALLED ===");
+  console.log("Request body:", req.body);
+  console.log("Request files:", req.files);
+  
   // 1. get user details from frontend or from the user
   const { a_id, email, name, password } = req.body;
-  console.log("email: ", email);
+  console.log("Extracted fields:", { a_id, email, name, password: password ? "***" : "missing" });
 
   if ([a_id, email, name, password].some((field) => field?.trim() === "")) {
+    console.log("Validation failed: Missing required fields");
     throw new ApiError(400, "All field are required");
   }
+  console.log("Field validation passed");
 
   // 3. check if user already exists: username, email
+  console.log("Checking if user already exists...");
   const existedUser = await User.findOne({
     $or: [{ a_id }, { email }],
   });
 
   if (existedUser) {
+    console.log("User already exists:", existedUser.email);
     throw new ApiError(409, "User with email or username already exists");
   }
+  console.log("User doesn't exist, proceeding...");
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
+  console.log("Avatar local path:", avatarLocalPath);
 
   if (!avatarLocalPath) {
+    console.log("No avatar file found");
     throw new ApiError(400, "avatar file is required");
   }
 
+  console.log("Uploading avatar to Cloudinary...");
   const avatar = await uploadOnCloudinary(avatarLocalPath);
+  console.log("Avatar upload result:", avatar);
 
-  if (!avatar) {
-    throw new ApiError(400, "avatar file is required");
-  }
+  
 
+  console.log("Creating user in database...");
   const user = await User.create({
     a_id,
     avatar: avatar?.url || "",
@@ -62,19 +74,40 @@ const registerUser = asyncHandler(async (req, res) => {
     password,
     name: name.toLowerCase(),
   });
+  console.log("User created:", user._id);
 
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
   if (!createdUser) {
+    console.log("Failed to fetch created user");
     throw new ApiError(500, "Something went wrong while registering the user");
   }
 
-  // 9. return response
+  console.log("User registration successful:", createdUser);
+  
+  // Generate tokens for the newly created user
+  console.log("Generating tokens for new user...");
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(createdUser._id);
+  console.log("Tokens generated successfully");
+
+  // Set cookie options
+  const options = {
+    httpOnly: true,
+    secure: false, // Set to true in production with HTTPS
+  };
+
+  // 9. return response with tokens
   return res
     .status(201)
-    .json(new ApiResponse(200, createdUser, "User registerd Successfully"));
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {
+      user: createdUser,
+      accessToken,
+      refreshToken
+    }, "User registered successfully"));
 });
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -112,7 +145,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
-    secure: true,
+    secure: false, // Set to true in production with HTTPS
   };
 
   return res
@@ -148,7 +181,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
-    secure: true,
+    secure: false, // Set to true in production with HTTPS
   };
 
   return res
@@ -184,7 +217,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
     const options = {
       httpOnly: true,
-      secure: true,
+      secure: false, // Set to true in production with HTTPS
     };
 
     const { accessToken, newRefreshToken } =

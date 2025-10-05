@@ -22,11 +22,8 @@ export const fetchData = async (req, res) => {
 
     if (site.tests && site.tests.length > 0) {
       // ✅ get latest test by date
-      const latestTest = site.tests.reduce((latest, current) => {
-        return new Date(current.date) > new Date(latest.date)
-          ? current
-          : latest;
-      });
+      // or change to last entry
+      const latestTest = site.tests[site.tests.length - 1];
 
       const response = {
         _id: site._id,
@@ -105,7 +102,7 @@ async function analyzeWithGemini(siteData, test) {
 
   let text = "";
   try {
-    const result = await withTimeout(model.generateContent(prompt), 30000);
+    const result = await withTimeout(model.generateContent(prompt), 40000);
     text = result.response.text();
 
     // Clean JSON
@@ -213,6 +210,7 @@ export const uploadCSVRaw = [
                 Mn,
                 As,
                 Cr,
+                season,
               } = row;
 
               // Prepare metals
@@ -256,6 +254,7 @@ export const uploadCSVRaw = [
                 siteInterpretation: null,
                 siteImpact: null,
                 policyRecommendations: null,
+                season,
               };
 
               let site = await Site.findOne({ siteCode });
@@ -282,6 +281,7 @@ export const uploadCSVRaw = [
                 date,
                 HPI,
                 HEI,
+                season,
               });
             }
 

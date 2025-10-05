@@ -1,2 +1,2 @@
-siteArea,State,siteCode,lat,lon,date,Pb,Cd,Zn,Cu,Ni,Mn,As,Cr
-Bund Garden,Maharashtra,PN-030,19.6204,73.5567,01-12-2025,15000,0.1,0.1,0.1,0.1,0.1,0.1,0.1
+siteArea,State,siteCode,lat,lon,date,Pb,Cd,Zn,Cu,Ni,Mn,As,Cr,season
+AIT vadi test,Maharashtra,PN-049,19.6204,73.5567,01-12-2025,15000,0.1,0.1,0.1,0.1,0.1,0.1,0.1,summer

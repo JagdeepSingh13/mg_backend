@@ -1,2 +1,2 @@
-siteArea,State,siteCode,lat,lon,date,Pb,Cd,Zn,Cu,Ni,Mn,As,Cr
-Pune Riverbank,Maharashtra,PN-002,18.5204,73.8567,2025-09-01,15,6,11800,70,12,210,22,5
+siteArea,State,siteCode,lat,lon,date,Pb,Cd,Zn,Cu,Ni,Mn,As,Cr,season
+Pune Area,Maharashtra,PN-075,18.5204,73.8567,2025-09-01,15,6,11800,70,12,210,22,5,winter
