@@ -13,16 +13,17 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:5176",
-      "http://127.0.0.1:5173",
-      "http://127.0.0.1:5174",
-      "http://127.0.0.1:5175",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ],
+    // origin: [
+    //   "http://localhost:5173",
+    //   "http://localhost:5174",
+    //   "http://localhost:5176",
+    //   "http://127.0.0.1:5173",
+    //   "http://127.0.0.1:5174",
+    //   "http://127.0.0.1:5175",
+    //   "http://localhost:3000",
+    //   "http://127.0.0.1:3000",
+    // ],
+    origin: "*",
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -42,12 +43,20 @@ app.get("/api/v1/hello", (req, res) => {
 
 // ✅ Test route for file upload
 const upload = multer({ dest: "public/temp/" });
-app.post("/api/v1/test-upload", upload.fields([{ name: "avatar", maxCount: 1 }]), (req, res) => {
-  console.log("=== TEST UPLOAD ROUTE ===");
-  console.log("Request body:", req.body);
-  console.log("Request files:", req.files);
-  res.json({ message: "Upload test successful", body: req.body, files: req.files });
-});
+app.post(
+  "/api/v1/test-upload",
+  upload.fields([{ name: "avatar", maxCount: 1 }]),
+  (req, res) => {
+    console.log("=== TEST UPLOAD ROUTE ===");
+    console.log("Request body:", req.body);
+    console.log("Request files:", req.files);
+    res.json({
+      message: "Upload test successful",
+      body: req.body,
+      files: req.files,
+    });
+  }
+);
 
 app.use("/api/data", dataRoutes);
 
