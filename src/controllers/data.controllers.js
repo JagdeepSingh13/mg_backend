@@ -6,9 +6,10 @@ import Site from "../models/data.model.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { calculateIndices } from "../utils/calcIndices.js";
 import { HM_CONSTANTS } from "../utils/hpiConstants.js";
+import stream from "stream";
 dotenv.config();
 
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ storage: multer.memoryStorage() });
 
 export const fetchData = async (req, res) => {
   try {
@@ -187,8 +188,11 @@ export const uploadCSVRaw = [
       }
 
       const results = [];
+      // Create a readable stream from the buffer
+      const bufferStream = new stream.PassThrough();
+      bufferStream.end(req.file.buffer);
 
-      fs.createReadStream(req.file.path)
+      bufferStream
         .pipe(csv())
         .on("data", (row) => results.push(row))
         .on("end", async () => {
