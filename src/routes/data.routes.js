@@ -1,16 +1,20 @@
 import { Router } from "express";
 import {
-  uploadCSV,
+  // uploadCSV,
   fetchData,
   fetchMap,
   siteTimeline,
   getOverview,
+  generateAIInsights,
+  uploadCSVRaw,
 } from "../controllers/data.controllers.js";
 
 const router = Router();
 
 // Upload CSV data
-router.post("/upload", uploadCSV);
+router.post("/upload", uploadCSVRaw);
+
+router.post("/sites/:siteCode/ai", generateAIInsights);
 
 // Fetch all data from DB
 router.get("/site/:siteCode", fetchData);

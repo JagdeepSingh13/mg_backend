@@ -22,11 +22,8 @@ export const fetchData = async (req, res) => {
 
     if (site.tests && site.tests.length > 0) {
       // ✅ get latest test by date
-      const latestTest = site.tests.reduce((latest, current) => {
-        return new Date(current.date) > new Date(latest.date)
-          ? current
-          : latest;
-      });
+      // or change to last entry
+      const latestTest = site.tests[site.tests.length - 1];
 
       const response = {
         _id: site._id,
@@ -55,45 +52,64 @@ export const fetchData = async (req, res) => {
   }
 };
 
-// Gemini setup
-const genAI = new GoogleGenerativeAI("AIzaSyDtyobWou_ixfjz2RmSaGRJyL93PQWlbkk");
-console.log("Gemini API Key:");
+// Gemini setup (use env var if provided, otherwise fallback to built-in key)
+const GEMINI_API_KEY =
+  process.env.GEMINI_API_KEY ||
+  process.env.GOOGLE_API_KEY ||
+  "AIzaSyB-0X1YdbCDLc3_1VdkUdncj2jT9ex8Wws";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+function withTimeout(promise, ms, onTimeoutMessage = "AI request timed out") {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(onTimeoutMessage)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 async function analyzeWithGemini(siteData, test) {
+  const metalsList = ["Pb", "Cd", "Zn", "Cu", "Ni", "Mn", "As", "Cr"];
+
   const prompt = `
-  You are an environmental analyst. Based on this site data, generate concise insights:
+  You are an environmental analyst. Based on this site data, generate concise insights and numeric future predictions:
 
   Site Area: ${siteData.siteArea}
   State: ${siteData.State}
   Location: lat ${siteData.location.lat}, lon ${siteData.location.lon}
-  Metals: ${test.metals.map((m) => `${m.metal}: ${m.values}`).join(", ")}
+  Date: ${test.date}
+  Metals (mg/L): 
+  ${test.metals.map((m) => `${m.metal}: ${m.values}`).join(", ")}
   HPI: ${test.HPI}
   HEI: ${test.HEI}
 
-  Respond ONLY in JSON format with 3 fields:
+  Respond ONLY in JSON format with this structure:
   {
     "siteInterpretation": "2 line interpretation",
     "siteImpact": "2 line description of potential impact",
-    "policyRecommendations": "2 line recommendation for policy makers"
+    "policyRecommendations": "3.5 line recommendation for policy makers",
+    "baselinePrediction": " a plain string with all the predicted values of all metals assuming the recommended policies are applied effectively",
+    "withPolicyPrediction": "a plain string with all the values of metals",
+    "effectOfPolicy": "2 lines explaining how policies could change metal concentrations and risks"
   }
+
+  Rules:
+  - BaselinePrediction = extrapolated numeric values based only on current data, assuming no policies are applied.
+  - WithPolicyPrediction = numeric values assuming the recommended policies are applied effectively.
+  - Predictions must always include ALL metals (Pb, Cd, Zn, Cu, Ni, Mn, As, Cr) even if their current value is missing.
+  - Predictions must be numeric (no text like 'slight increase').
+  - Keep predictions realistic: within ±20% of current values unless strong justification.
   `;
 
   let text = "";
   try {
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(model.generateContent(prompt), 40000);
     text = result.response.text();
 
-    // Remove markdown code fences (```json ... ```)
+    // Clean JSON
     text = text.replace(/```json|```/g, "").trim();
-
-    // Try to extract JSON block if extra text is present
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      text = jsonMatch[0];
-    }
+    if (jsonMatch) text = jsonMatch[0];
 
-    // Parse safely
     return JSON.parse(text);
   } catch (e) {
     console.error("Gemini JSON parse error:", e, "\nRaw Gemini output:", text);
@@ -101,6 +117,9 @@ async function analyzeWithGemini(siteData, test) {
       siteInterpretation: "Interpretation unavailable.",
       siteImpact: "Impact unavailable.",
       policyRecommendations: "Recommendation unavailable.",
+      baselinePrediction: "baselinePrediction unavailable",
+      withPolicyPrediction: "withPolicyPrediction unavailable",
+      effectOfPolicy: "Unavailable.",
     };
   }
 }
@@ -111,7 +130,11 @@ async function analyzeIndicesWithGemini(siteData, test) {
   You are an environmental analyst. Given the following metal indices for a site, generate concise findings:
 
   Metals:
-  ${test.metals.map((m) => `${m.metal}: Igeo=${m.Igeo}, CF=${m.CF}, EF=${m.EF}, ERI=${m.ERI}`).join("\n")}
+  ${test.metals
+    .map(
+      (m) => `${m.metal}: Igeo=${m.Igeo}, CF=${m.CF}, EF=${m.EF}, ERI=${m.ERI}`
+    )
+    .join("\n")}
 
   Respond ONLY in JSON format with four fields:
   {
@@ -122,16 +145,30 @@ async function analyzeIndicesWithGemini(siteData, test) {
   }
   `;
 
+  if (!model) {
+    return {
+      igeo_Finding: "Interpretation unavailable",
+      cf_Finding: "Interpretation unavailable",
+      ef_Finding: "Interpretation unavailable",
+      eri_Finding: "Interpretation unavailable",
+    };
+  }
+
   let text = "";
   try {
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(model.generateContent(prompt), 30000);
     text = result.response.text();
     text = text.replace(/```json|```/g, "").trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) text = jsonMatch[0];
     return JSON.parse(text);
   } catch (e) {
-    console.error("Gemini index findings parse error:", e, "\nRaw Gemini output:", text);
+    console.error(
+      "Gemini index findings parse error:",
+      e,
+      "\nRaw Gemini output:",
+      text
+    );
     return {
       igeo_Finding: "Interpretation unavailable",
       cf_Finding: "Interpretation unavailable",
@@ -141,7 +178,7 @@ async function analyzeIndicesWithGemini(siteData, test) {
   }
 }
 
-export const uploadCSV = [
+export const uploadCSVRaw = [
   upload.single("file"),
   async (req, res) => {
     try {
@@ -151,14 +188,11 @@ export const uploadCSV = [
 
       const results = [];
 
-      // Parse CSV
       fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on("data", (row) => {
-          results.push(row);
-        })
+        .on("data", (row) => results.push(row))
         .on("end", async () => {
-          const processedResults = [];
+          const data = [];
           try {
             for (const row of results) {
               const {
@@ -176,9 +210,10 @@ export const uploadCSV = [
                 Mn,
                 As,
                 Cr,
+                season,
               } = row;
 
-              // Prepare metals array dynamically
+              // Prepare metals
               const metals = [];
               const metalMap = { Pb, Cd, Zn, Cu, Ni, Mn, As, Cr };
 
@@ -191,23 +226,12 @@ export const uploadCSV = [
                   let EF = null;
                   let ERI = null;
 
-                  if (S) {
-                    CF = Math.round((Number(value) / S) * 1000) / 1000;
-                  }
+                  if (S) CF = +(Number(value) / S).toFixed(3);
                   if (B) {
-                    Igeo =
-                      Math.round(
-                        Math.log2(Number(value) / (1.5 * B)) * 1000
-                      ) / 1000;
-
-                    // EF = C / B
-                    EF = Math.round((Number(value) / B) * 1000) / 1000;
+                    Igeo = +Math.log2(Number(value) / (1.5 * B)).toFixed(3);
+                    EF = +(Number(value) / B).toFixed(3);
                   }
-
-                  // ERI = CF × C
-                  if (CF !== null) {
-                    ERI = Math.round(CF * Number(value) * 1000) / 1000;
-                  }
+                  if (CF !== null) ERI = +(CF * Number(value)).toFixed(3);
 
                   metals.push({
                     metal,
@@ -218,7 +242,7 @@ export const uploadCSV = [
                     ERI,
                   });
                 }
-              } // ✅ closed metals loop properly
+              }
 
               const { HPI, HEI } = calculateIndices(metals);
 
@@ -230,11 +254,10 @@ export const uploadCSV = [
                 siteInterpretation: null,
                 siteImpact: null,
                 policyRecommendations: null,
+                season,
               };
 
-              // Upsert site
               let site = await Site.findOne({ siteCode });
-
               if (!site) {
                 site = new Site({
                   siteArea,
@@ -245,16 +268,10 @@ export const uploadCSV = [
                 });
               }
 
-              const aiAnalysis = await analyzeWithGemini(site, test);
-              const indexFindings = await analyzeIndicesWithGemini(site, test);
-
-              // Merge all findings into test
-              test = { ...test, ...aiAnalysis, ...indexFindings };
-
               site.tests.push(test);
               await site.save();
 
-              processedResults.push({
+              data.push({
                 siteArea,
                 State,
                 siteCode,
@@ -264,18 +281,17 @@ export const uploadCSV = [
                 date,
                 HPI,
                 HEI,
-                aiAnalysis,
-                indexFindings,
+                season,
               });
             }
 
             return res.status(200).json({
-              processedResults,
-              message: "CSV data uploaded successfully",
+              data,
+              message: "CSV data uploaded successfully (raw, no AI)",
             });
           } catch (err) {
             console.error(err);
-            return res.status(500).json({ error: "Error saving data to DB" });
+            return res.status(500).json({ error: "Error saving raw data" });
           }
         });
     } catch (err) {
@@ -285,9 +301,75 @@ export const uploadCSV = [
   },
 ];
 
+export const generateAIInsights = async (req, res) => {
+  try {
+    const { siteCode } = req.params;
+
+    const site = await Site.findOne({ siteCode });
+    if (!site) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+
+    // Get latest test
+    // not latest test but the the test just uploaded
+    // const latestTest = site.tests.sort(
+    //   (a, b) => new Date(b.date) - new Date(a.date)
+    // )[0];
+    const latestTest = site.tests[site.tests.length - 1];
+
+    if (!latestTest) {
+      return res
+        .status(400)
+        .json({ error: "No tests available for this site" });
+    }
+
+    // Run Gemini on existing data (only if model configured)
+    let aiAnalysis = {
+      siteInterpretation: null,
+      siteImpact: null,
+      policyRecommendations: null,
+      baselinePrediction: null,
+      withPolicyPrediction: null,
+      effectOfPolicy: null,
+    };
+    let indexFindings = null;
+    if (model) {
+      aiAnalysis = await analyzeWithGemini(site, latestTest);
+      indexFindings = await analyzeIndicesWithGemini(site, latestTest);
+    }
+
+    // Update main AI insights
+    latestTest.siteInterpretation = aiAnalysis.siteInterpretation;
+    latestTest.siteImpact = aiAnalysis.siteImpact;
+    latestTest.policyRecommendations = aiAnalysis.policyRecommendations;
+    latestTest.baselinePrediction = aiAnalysis.baselinePrediction;
+    latestTest.withPolicyPrediction = aiAnalysis.withPolicyPrediction;
+    latestTest.effectOfPolicy = aiAnalysis.effectOfPolicy;
+
+    // Save index findings into schema fields
+    if (indexFindings) {
+      latestTest.igeo_Finding = indexFindings.igeo_Finding;
+      latestTest.cf_Finding = indexFindings.cf_Finding;
+      latestTest.ef_Finding = indexFindings.ef_Finding;
+      latestTest.eri_Finding = indexFindings.eri_Finding;
+    }
+
+    await site.save();
+
+    res.status(200).json({
+      message: "AI insights generated successfully",
+      siteCode,
+      aidata: latestTest,
+    });
+  } catch (error) {
+    console.error("Error generating AI insights:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 export const fetchMap = async (req, res) => {
   try {
-    const { state } = req.params; // get state from route param
+    const { state } = req.params;
 
     const sites = await Site.aggregate([
       {

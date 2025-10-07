@@ -1,8 +1,5 @@
-import dotenv from "dotenv";
-import { app } from "./app.js";
 import mongoose from "mongoose";
-dotenv.config();
-
+import { app } from "./app.js";
 const PORT = 5000;
 const MONGO_URI =
   "mongodb+srv://jagdeeps3105:jagdeeps3105@cluster0.oitrx8g.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";

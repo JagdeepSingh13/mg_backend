@@ -5,8 +5,8 @@ const metalSchema = new mongoose.Schema({
   values: { type: Number, required: true },
   CF: { type: Number, default: null },
   Igeo: { type: Number, default: null },
-  EF:{ type: Number, default: null },
-  ERI:{ type: Number, default: null },
+  EF: { type: Number, default: null },
+  ERI: { type: Number, default: null },
 });
 
 const daySchema = new mongoose.Schema({
@@ -21,6 +21,10 @@ const daySchema = new mongoose.Schema({
   cf_Finding: { type: String, default: null },
   ef_Finding: { type: String, default: null },
   eri_Finding: { type: String, default: null },
+  baselinePrediction: { type: String, default: null },
+  withPolicyPrediction: { type: String, default: null },
+  effectOfPolicy: { type: String, default: null },
+  season: {type: String, default:null}
 });
 
 const siteSchema = new mongoose.Schema({
