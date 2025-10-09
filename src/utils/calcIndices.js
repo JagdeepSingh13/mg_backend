@@ -9,7 +9,7 @@ export function calculateIndices(metals) {
     const M = values;
     const { S, I } = HM_CONSTANTS[metal] || {};
 
-    if (!S || !I) continue; // skip metals not in constants
+    if (S === undefined || I === undefined) continue;
 
     const Wi = 1 / S;
     const Qi = ((M - I) / (S - I)) * 100;
